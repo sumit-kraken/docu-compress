@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: docu-compress
+    env: docker # Uses the root Dockerfile
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: 8000
