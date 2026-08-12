@@ -18,6 +18,8 @@ WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 
 skeletonizer = ASTSkeletonizer()
 
+from docu_compress.utils import resolve_repo_path
+
 class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
@@ -28,13 +30,22 @@ class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(metrics_tracker.get_summary())
         elif parsed.path == "/api/scan":
             query = urllib.parse.parse_qs(parsed.query)
-            repo_path = query.get("path", ["."])[0]
-            skeleton = get_repo_skeleton(repo_path)
-            summary = metrics_tracker.get_summary()
-            self.send_json_response({
-                "skeleton": skeleton,
-                "summary": summary
-            })
+            raw_path = query.get("path", ["."])[0]
+            temp_cleanup = None
+            try:
+                repo_path, temp_cleanup, repo_name = resolve_repo_path(raw_path)
+                skeleton = get_repo_skeleton(repo_path)
+                summary = metrics_tracker.get_summary()
+                self.send_json_response({
+                    "skeleton": skeleton,
+                    "summary": summary,
+                    "repo_name": repo_name
+                })
+            except Exception as err:
+                self.send_json_response({"error": str(err)}, status=400)
+            finally:
+                if temp_cleanup and os.path.exists(temp_cleanup):
+                    shutil.rmtree(temp_cleanup, ignore_errors=True)
         else:
             super().do_GET()
 
@@ -57,22 +68,31 @@ class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
                 "metadata": meta
             })
         elif parsed.path == "/api/run_pipeline":
-            repo_path = data.get("path", ".")
+            raw_path = data.get("path", ".")
             logs = []
             
             def log_callback(agent, msg):
                 logs.append({"agent": agent, "message": msg})
 
-            orchestrator = OrchestrationEngine(repo_path)
-            res = orchestrator.run_pipeline_sync(log_callback)
-            res["logs"] = logs
-            self.send_json_response(res)
+            temp_cleanup = None
+            try:
+                repo_path, temp_cleanup, repo_name = resolve_repo_path(raw_path)
+                orchestrator = OrchestrationEngine(repo_path)
+                res = orchestrator.run_pipeline_sync(log_callback)
+                res["logs"] = logs
+                res["repo_name"] = repo_name
+                self.send_json_response(res)
+            except Exception as err:
+                self.send_json_response({"error": str(err), "logs": logs}, status=400)
+            finally:
+                if temp_cleanup and os.path.exists(temp_cleanup):
+                    shutil.rmtree(temp_cleanup, ignore_errors=True)
         else:
             self.send_error(404, "Not Found")
 
-    def send_json_response(self, data: Dict[str, Any]):
+    def send_json_response(self, data: Dict[str, Any], status: int = 200):
         response_bytes = json.dumps(data).encode('utf-8')
-        self.send_response(200)
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Content-Length', str(len(response_bytes)))

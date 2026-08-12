@@ -4,9 +4,11 @@ import json
 from typing import Dict, Any, List, Optional
 from fastmcp import FastMCP
 
+import shutil
 from docu_compress.ast_engine import ASTSkeletonizer
 from docu_compress.metrics import metrics_tracker
 from docu_compress.token_reducer import TokenReducer
+from docu_compress.utils import resolve_repo_path
 
 # Create FastMCP server instance
 mcp = FastMCP("DocuCompress AI MCP Server")
@@ -24,48 +26,57 @@ def get_repo_skeleton(repo_path: str = ".") -> str:
     Parses repository source files and returns class/method signatures ONLY (no method bodies).
     Dramatically reduces context size (85-90% token reduction).
     """
-    repo_path = os.path.abspath(repo_path)
-    if not os.path.exists(repo_path):
-        return f"Error: Path '{repo_path}' does not exist."
+    temp_dir = None
+    try:
+        repo_path, temp_dir, _ = resolve_repo_path(repo_path)
+    except Exception as err:
+        return f"Error: {str(err)}"
 
-    metrics_tracker.reset()
-    supported_exts = {".py", ".ts", ".js", ".tsx", ".jsx", ".java", ".cpp", ".cs"}
-    skeleton_map = []
-    total_files = 0
-    
-    for root, dirs, files in os.walk(repo_path):
-        if _should_ignore(root):
-            continue
-        for file in files:
-            ext = os.path.splitext(file)[1].lower()
-            if ext in supported_exts:
-                full_path = os.path.join(root, file)
-                rel_path = os.path.relpath(full_path, repo_path)
-                
-                try:
-                    with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                    
-                    skel, metrics = skeletonizer.skeletonize(content, rel_path)
-                    metrics_tracker.record_scan(rel_path, metrics["raw_tokens_est"], metrics["skeleton_tokens_est"])
-                    
-                    skeleton_map.append(f"--- FILE: {rel_path} (Raw: ~{metrics['raw_tokens_est']} tokens -> Skeleton: ~{metrics['skeleton_tokens_est']} tokens | Reduction: {metrics['reduction_pct']}%) ---")
-                    skeleton_map.append(skel)
-                    skeleton_map.append("")
-                    total_files += 1
-                except Exception as e:
-                    skeleton_map.append(f"--- FILE: {rel_path} (Error parsing: {str(e)}) ---")
+    try:
+        if not os.path.exists(repo_path):
+            return f"Error: Path '{repo_path}' does not exist."
 
-    summary = metrics_tracker.get_summary()
-    header = (
-        f"=================================================================\n"
-        f"⚡ DOCUCOMPRESS AI REPOSITORY SKELETON MAP\n"
-        f"Files Scanned: {total_files} | Raw Tokens: ~{summary['total_raw_tokens']} -> Skeleton Tokens: ~{summary['total_skeleton_tokens']}\n"
-        f"Overall Reduction: {summary['reduction_pct']}% | Compression Ratio: {summary['compression_ratio']}\n"
-        f"=================================================================\n\n"
-    )
-    
-    return header + "\n".join(skeleton_map)
+        metrics_tracker.reset()
+        supported_exts = {".py", ".ts", ".js", ".tsx", ".jsx", ".java", ".cpp", ".cs"}
+        skeleton_map = []
+        total_files = 0
+        
+        for root, dirs, files in os.walk(repo_path):
+            if _should_ignore(root):
+                continue
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in supported_exts:
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, repo_path)
+                    
+                    try:
+                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                        
+                        skel, metrics = skeletonizer.skeletonize(content, rel_path)
+                        metrics_tracker.record_scan(rel_path, metrics["raw_tokens_est"], metrics["skeleton_tokens_est"])
+                        
+                        skeleton_map.append(f"--- FILE: {rel_path} (Raw: ~{metrics['raw_tokens_est']} tokens -> Skeleton: ~{metrics['skeleton_tokens_est']} tokens | Reduction: {metrics['reduction_pct']}%) ---")
+                        skeleton_map.append(skel)
+                        skeleton_map.append("")
+                        total_files += 1
+                    except Exception as e:
+                        skeleton_map.append(f"--- FILE: {rel_path} (Error parsing: {str(e)}) ---")
+
+        summary = metrics_tracker.get_summary()
+        header = (
+            f"=================================================================\n"
+            f"⚡ DOCUCOMPRESS AI REPOSITORY SKELETON MAP\n"
+            f"Files Scanned: {total_files} | Raw Tokens: ~{summary['total_raw_tokens']} -> Skeleton Tokens: ~{summary['total_skeleton_tokens']}\n"
+            f"Overall Reduction: {summary['reduction_pct']}% | Compression Ratio: {summary['compression_ratio']}\n"
+            f"=================================================================\n\n"
+        )
+        
+        return header + "\n".join(skeleton_map)
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 @mcp.tool()
 def get_code_skeleton(repo_path: str = ".") -> str:
