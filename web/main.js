@@ -106,7 +106,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function executePipeline(path) {
-    addLog("Orchestrator", `Initiating 3-Agent Orchestration Pipeline for target '${path}'...`, "info");
+    const engineModeSelect = document.getElementById("engineModeSelect");
+    const mode = engineModeSelect ? engineModeSelect.value : "local";
+
+    addLog("Orchestrator", `Initiating 3-Agent Orchestration Pipeline [Mode: ${mode.toUpperCase()}] for target '${path}'...`, "info");
     
     stepExplorer.classList.add("active");
     stepDeepDive.classList.remove("active");
@@ -115,7 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch("/api/run_pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: path })
+      body: JSON.stringify({ path: path, mode: mode })
     });
     const data = await res.json();
 

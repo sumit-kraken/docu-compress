@@ -48,13 +48,17 @@ async def run_gemini_agent(prompt: str):
         ]
     )
 
+    chunks = []
     async with Agent(config) as agent:
         print(f"💬 Prompt: {prompt}\n")
         response = await agent.chat(prompt)
         
         async for chunk in response:
-            print(chunk, end="", flush=True)
+            chunk_str = str(chunk)
+            chunks.append(chunk_str)
+            print(chunk_str, end="", flush=True)
         print("\n")
+    return "".join(chunks)
 
 
 def run_local_orchestrator(repo_path: str = "."):

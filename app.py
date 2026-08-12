@@ -20,6 +20,13 @@ skeletonizer = ASTSkeletonizer()
 
 from docu_compress.utils import resolve_repo_path
 
+import asyncio
+try:
+    from agent import run_gemini_agent, HAS_ANTIGRAVITY_SDK
+except ImportError:
+    HAS_ANTIGRAVITY_SDK = False
+    run_gemini_agent = None
+
 class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WEB_DIR, **kwargs)
@@ -69,6 +76,7 @@ class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
             })
         elif parsed.path == "/api/run_pipeline":
             raw_path = data.get("path", ".")
+            mode = data.get("mode", "local")
             logs = []
             
             def log_callback(agent, msg):
@@ -77,8 +85,30 @@ class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
             temp_cleanup = None
             try:
                 repo_path, temp_cleanup, repo_name = resolve_repo_path(raw_path)
-                orchestrator = OrchestrationEngine(repo_path)
-                res = orchestrator.run_pipeline_sync(log_callback)
+                
+                if mode == "gemini":
+                    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+                    if not gemini_key:
+                        raise RuntimeError(
+                            "GEMINI_API_KEY is not set in Render environment variables. "
+                            "Please add GEMINI_API_KEY under Render -> Service Settings -> Environment Variables to enable AI Mode."
+                        )
+                    if not HAS_ANTIGRAVITY_SDK or not run_gemini_agent:
+                        log_callback("Gemini AI Agent", "Antigravity SDK not present. Running local AST pipeline as fallback...")
+                        orchestrator = OrchestrationEngine(repo_path)
+                        res = orchestrator.run_pipeline_sync(log_callback)
+                    else:
+                        log_callback("Gemini AI Agent", f"Connecting to Gemini LLM with MCP server attached for repository '{repo_name}'...")
+                        prompt = f"Explore codebase at '{repo_path}' and generate architecture summary."
+                        llm_out = asyncio.run(run_gemini_agent(prompt))
+                        orchestrator = OrchestrationEngine(repo_path)
+                        res = orchestrator.run_pipeline_sync(log_callback)
+                        if llm_out:
+                            res["markdown_wiki"] = llm_out
+                else:
+                    orchestrator = OrchestrationEngine(repo_path)
+                    res = orchestrator.run_pipeline_sync(log_callback)
+                    
                 res["logs"] = logs
                 res["repo_name"] = repo_name
                 self.send_json_response(res)
