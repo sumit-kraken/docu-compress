@@ -105,9 +105,23 @@ document.addEventListener("DOMContentLoaded", () => {
     wikiMarkdownText.innerHTML = html;
   }
 
+  const engineModeSelect = document.getElementById("engineModeSelect");
+  const apiKeyGroup = document.getElementById("apiKeyGroup");
+
+  if (engineModeSelect && apiKeyGroup) {
+    engineModeSelect.addEventListener("change", () => {
+      if (engineModeSelect.value === "gemini") {
+        apiKeyGroup.style.display = "block";
+      } else {
+        apiKeyGroup.style.display = "none";
+      }
+    });
+  }
+
   async function executePipeline(path) {
-    const engineModeSelect = document.getElementById("engineModeSelect");
     const mode = engineModeSelect ? engineModeSelect.value : "local";
+    const apiKeyInput = document.getElementById("apiKeyInput");
+    const apiKey = apiKeyInput ? apiKeyInput.value.trim() : "";
 
     addLog("Orchestrator", `Initiating 3-Agent Orchestration Pipeline [Mode: ${mode.toUpperCase()}] for target '${path}'...`, "info");
     
@@ -118,7 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch("/api/run_pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: path, mode: mode })
+      body: JSON.stringify({ path: path, mode: mode, apiKey: apiKey })
     });
     const data = await res.json();
 

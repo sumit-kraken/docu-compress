@@ -87,18 +87,19 @@ class DocuCompressHandler(http.server.SimpleHTTPRequestHandler):
                 repo_path, temp_cleanup, repo_name = resolve_repo_path(raw_path)
                 
                 if mode == "gemini":
-                    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-                    if not gemini_key:
+                    user_key = data.get("apiKey", "").strip()
+                    active_key = user_key or os.environ.get("GEMINI_API_KEY", "").strip()
+                    if not active_key:
                         raise RuntimeError(
-                            "GEMINI_API_KEY is not set in Render environment variables. "
-                            "Please add GEMINI_API_KEY under Render -> Service Settings -> Environment Variables to enable AI Mode."
+                            "Please enter your Gemini API Key in the UI input box to run Live Gemini AI Mode."
                         )
+                    os.environ["GEMINI_API_KEY"] = active_key
                     if not HAS_ANTIGRAVITY_SDK or not run_gemini_agent:
-                        log_callback("Gemini AI Agent", "Antigravity SDK not present. Running local AST pipeline as fallback...")
+                        log_callback("Gemini AI Agent", "Antigravity SDK not present in environment. Running local AST pipeline as fallback...")
                         orchestrator = OrchestrationEngine(repo_path)
                         res = orchestrator.run_pipeline_sync(log_callback)
                     else:
-                        log_callback("Gemini AI Agent", f"Connecting to Gemini LLM with MCP server attached for repository '{repo_name}'...")
+                        log_callback("Gemini AI Agent", f"Connecting to Gemini LLM with user-provided API key for repository '{repo_name}'...")
                         prompt = f"Explore codebase at '{repo_path}' and generate architecture summary."
                         llm_out = asyncio.run(run_gemini_agent(prompt))
                         orchestrator = OrchestrationEngine(repo_path)
