@@ -81,13 +81,31 @@ class OrchestrationEngine:
 
             log("Wiki Publisher Agent", f"Wiki documentation & Mermaid sequence diagrams successfully generated for '{repo_name}'!")
 
+            sample_file = {}
+            if sampled_files:
+                sample_rel_name, sample_full_path = sampled_files[0]
+                try:
+                    with open(sample_full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        sample_orig = f.read()
+                    sample_skel, sample_meta = self.skeletonizer.skeletonize(sample_orig, sample_rel_name)
+                    sample_file = {
+                        "filename": sample_rel_name,
+                        "original": sample_orig,
+                        "skeleton": sample_skel,
+                        "raw_tokens": sample_meta.get("raw_tokens_est", 0),
+                        "skeleton_tokens": sample_meta.get("skeleton_tokens_est", 0)
+                    }
+                except Exception:
+                    pass
+
             return {
                 "repo_path": self.repo_path,
                 "repo_name": repo_name,
                 "skeleton_output": skeleton_output,
                 "metrics": metrics,
                 "mermaid_diagram": mermaid_diagram,
-                "markdown_wiki": markdown_wiki
+                "markdown_wiki": markdown_wiki,
+                "sample_file": sample_file
             }
         finally:
             if temp_dir and os.path.exists(temp_dir):
@@ -96,12 +114,13 @@ class OrchestrationEngine:
     def _generate_mermaid_sequence_diagram(self, repo_name: str, metrics: Dict[str, Any], sampled_files: List[tuple]) -> str:
         file_nodes = ""
         for i, (rel_name, _) in enumerate(sampled_files[:3]):
-            clean_name = rel_name.replace("\\", "/").replace(".", "_").replace("/", "_")
-            file_nodes += f"    participant F{i} as {rel_name}\n"
+            clean_rel = rel_name.replace("\\", "/").replace('"', '')
+            file_nodes += f'    participant F{i} as "{clean_rel}"\n'
 
         if not file_nodes:
-            file_nodes = "    participant App as Target Application\n"
+            file_nodes = '    participant App as "Target Application"\n'
 
+        clean_repo = repo_name.replace('"', '')
         return (
             "sequenceDiagram\n"
             "    autonumber\n"
@@ -111,7 +130,7 @@ class OrchestrationEngine:
             "    participant MCP as Local MCP Server\n"
             f"{file_nodes}"
             "    participant Wiki as Wiki Publisher Agent\n\n"
-            f"    User->>Explorer: Target Repo Path: '{repo_name}'\n"
+            f'    User->>Explorer: Target Repo: "{clean_repo}"\n'
             "    Explorer->>MCP: get_repo_skeleton(repo_path)\n"
             "    MCP-->>Explorer: Returns AST Skeleton Map (85-90% token reduction)\n"
             "    Explorer->>DeepDive: Identify core interfaces & functions\n"

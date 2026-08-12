@@ -127,6 +127,18 @@ document.addEventListener("DOMContentLoaded", () => {
     stepDeepDive.classList.add("active");
     stepWiki.classList.add("active");
 
+    if (data.sample_file && data.sample_file.original) {
+      const origEl = document.getElementById("originalCode");
+      const skelEl = document.getElementById("skeletonCode");
+      const origTitle = document.getElementById("originalCodeTitle");
+      const skelTitle = document.getElementById("skeletonCodeTitle");
+
+      if (origEl) origEl.textContent = data.sample_file.original;
+      if (skelEl) skelEl.textContent = data.sample_file.skeleton;
+      if (origTitle) origTitle.innerHTML = `<i class="fa-solid fa-file-lines"></i> Original Source Code (${data.sample_file.filename} - ~${data.sample_file.raw_tokens || 0} Tokens)`;
+      if (skelTitle) skelTitle.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Compressed AST Skeleton (${data.sample_file.filename} - ~${data.sample_file.skeleton_tokens || 0} Tokens)`;
+    }
+
     fullRepoSkeletonText.textContent = data.skeleton_output;
     
     renderMarkdownWiki(data.markdown_wiki);
