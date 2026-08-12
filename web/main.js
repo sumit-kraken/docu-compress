@@ -140,6 +140,12 @@ document.addEventListener("DOMContentLoaded", () => {
       data.logs.forEach(l => addLog(l.agent, l.message, "success"));
     }
 
+    if (!res.ok || data.error) {
+      const errMsg = data.error || `HTTP ${res.status}: Pipeline execution failed`;
+      addLog("System", `Error: ${errMsg}`, "info");
+      throw new Error(errMsg);
+    }
+
     stepExplorer.classList.add("active");
     stepDeepDive.classList.add("active");
     stepWiki.classList.add("active");

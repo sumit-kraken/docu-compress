@@ -31,6 +31,7 @@ async def run_gemini_agent(prompt: str):
     print("=========================================================")
     print("⚡ Connecting to Gemini Model with MCP tools attached...\n")
     
+    mcp_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mcp_server.py")
     config = LocalAgentConfig(
         system_instructions="""
         You are DocuCompress AI, an agent specializing in codebase exploration.
@@ -42,8 +43,8 @@ async def run_gemini_agent(prompt: str):
         mcp_servers=[
             McpStdioServer(
                 name="docucompress_mcp",
-                command="python",
-                args=["mcp_server.py"]
+                command=sys.executable,
+                args=[mcp_script]
             )
         ]
     )
